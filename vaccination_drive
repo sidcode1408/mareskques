@@ -1,0 +1,18 @@
+%scala
+//code to make records 100x 
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.expressions.Window
+
+val df = spark.read.option("header","true").csv("dbfs:/FileStore/tables/us_500.csv")
+val employeeDF = df.withColumn("dummy", explode(array((1 until 101).map(lit): _*))).selectExpr(df.columns: _*)
+employeeDF.createOrReplaceTempView("employeeDF")
+
+spark.sql("select city,tot_employee,rank() over (order by tot_employee desc) as pref from (select city,count(*) as tot_employee from employeeDF group by city)").createOrReplaceTempView("CityEmployeeDensity")
+
+
+spark.sql("select emp.*,tot_employee,pref as Sequence  from employeeDF emp inner join CityEmployeeDensity on emp.city=CityEmployeeDensity.city").createOrReplaceTempView("VaccinationDrivePlan")
+
+
+final_report=spark.sql("select city,Sequence,tot_employee, count(*)/100 as no_of_days from VaccinationDrivePlan group by city,Sequence,tot_employee")
+
+display(final_report)
