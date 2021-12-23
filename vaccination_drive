@@ -7,12 +7,28 @@ val df = spark.read.option("header","true").csv("dbfs:/FileStore/tables/us_500.c
 val employeeDF = df.withColumn("dummy", explode(array((1 until 101).map(lit): _*))).selectExpr(df.columns: _*)
 employeeDF.createOrReplaceTempView("employeeDF")
 
-spark.sql("select city,tot_employee,rank() over (order by tot_employee desc) as pref from (select city,count(*) as tot_employee from employeeDF group by city)").createOrReplaceTempView("CityEmployeeDensity")
+
+val CityEmployeeDensity = spark.sql("select city,tot_employee,rank() over (order by tot_employee desc) as pref from (select city,count(*) as tot_employee from employeeDF group by city)")
+
+display(CityEmployeeDensity)
+
+CityEmployeeDensity.createOrReplaceTempView("CityEmployeeDensity")
 
 
-spark.sql("select emp.*,tot_employee,pref as Sequence  from employeeDF emp inner join CityEmployeeDensity on emp.city=CityEmployeeDensity.city").createOrReplaceTempView("VaccinationDrivePlan")
+val VaccinationDrivePlan = spark.sql("select emp.*,tot_employee,pref as Sequence from employeeDF emp inner join CityEmployeeDensity on emp.city=CityEmployeeDensity.city ")
 
+display(VaccinationDrivePlan)
 
-final_report=spark.sql("select city,Sequence,tot_employee, count(*)/100 as no_of_days from VaccinationDrivePlan group by city,Sequence,tot_employee")
+VaccinationDrivePlan.createOrReplaceTempView("VaccinationDrivePlan")
 
-display(final_report)
+//schedule to decide which employee will get vaccinated on which date 
+
+val VaccinationSchedule= VaccinationDrivePlan.withColumn("vaccination_Date", expr("date_add(current_date(), sequence-1)"))
+
+display(VaccinationSchedule)
+
+//final report showing the number of days required to vaccinate each city 
+
+val Final_Report=spark.sql("select city,Sequence,tot_employee, count(*)/100 as no_of_days from VaccinationDrivePlan group by city,Sequence,tot_employee")
+
+display(Final_Report)
